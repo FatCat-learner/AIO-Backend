@@ -1,0 +1,59 @@
+[project]
+name = "aio-backend"
+version = "0.1.0"
+description = "FastAPI backend for AIO Sport"
+readme = "README.md"
+authors = [
+    { name = "Albert Huang", email = "hch@aginome.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "aiosqlite>=0.22.1",
+    "asyncpg>=0.31.0",
+    "bcrypt>=5.0.0",
+    "fastapi[standard]>=0.141.1",
+    "geoalchemy2>=0.20.0",
+    "pydantic-settings>=2.15.0",
+    "pyjwt>=2.15.0",
+    "sqlalchemy[asyncio]>=2.1.1",
+]
+
+[tool.fastapi]
+entrypoint = "main:app"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 88
+indent-width = 4
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
+skip-magic-trailing-comma = false
+docstring-code-format = true
+docstring-code-line-length = "dynamic"
+
+[build-system]
+requires = ["uv_build>=0.12.17,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "api"
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=9.1.1",
+    "ruff>=0.15.0",
+]
+[tool.uv]
+link-mode = "copy"
