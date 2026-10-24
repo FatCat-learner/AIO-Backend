@@ -32,7 +32,7 @@ def _create_workout(client, user_id: str) -> dict:
 
 def test_push_then_pull(auth_client: TestClient):
     # 先拿到当前用户 ID
-    me = auth_client.get("/api/users/me").json()
+    me = auth_client.get("/api/users/me").json()["data"]
 
     # 推送一条记录
     created = _create_workout(auth_client, me["id"])
@@ -46,8 +46,18 @@ def test_push_then_pull(auth_client: TestClient):
     assert created["id"] in ids
 
 
+def test_sync_validation_error_uses_standard_response(auth_client: TestClient):
+    response = auth_client.post("/api/sync/push", json={})
+
+    assert response.status_code == 422
+    assert response.json()["code"] == 422
+    assert response.json()["status"] == "error"
+    assert response.json()["message"] == "请求参数校验失败"
+    assert response.json()["data"]
+
+
 def test_pull_incremental(auth_client: TestClient):
-    me = auth_client.get("/api/users/me").json()
+    me = auth_client.get("/api/users/me").json()["data"]
     _create_workout(auth_client, me["id"])
 
     # 第一次拉取，拿到时间戳
@@ -61,7 +71,7 @@ def test_pull_incremental(auth_client: TestClient):
 
 
 def test_soft_delete_sync(auth_client: TestClient):
-    me = auth_client.get("/api/users/me").json()
+    me = auth_client.get("/api/users/me").json()["data"]
     created = _create_workout(auth_client, me["id"])
 
     # 通过 push 删除

@@ -1,9 +1,9 @@
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 
 def test_create_running_cardio_with_route(auth_client):
-    start_time = datetime.now(timezone.utc).replace(microsecond=0)
+    start_time = datetime.now(UTC).replace(microsecond=0)
     geojson = (
         '{"type":"LineString","coordinates":[[116.4,39.9],[116.5,40.0],[116.6,40.1]]}'
     )
@@ -20,7 +20,7 @@ def test_create_running_cardio_with_route(auth_client):
     )
 
     assert response.status_code == 200, response.text
-    data = response.json()
+    data = response.json()["data"]
     assert data["type"] == "run"
     assert datetime.fromisoformat(data["start_time"]) == start_time.replace(tzinfo=None)
     assert data["distance_m"] == 5000
@@ -29,4 +29,4 @@ def test_create_running_cardio_with_route(auth_client):
     route_response = auth_client.get(f"/api/cardio/{data['id']}/geojson")
 
     assert route_response.status_code == 200, route_response.text
-    assert json.loads(route_response.json()["geojson"]) == json.loads(geojson)
+    assert json.loads(route_response.json()["data"]["geojson"]) == json.loads(geojson)

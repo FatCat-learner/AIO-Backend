@@ -6,15 +6,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.v1.base import get_current_user
 from core.database import get_db
+from core.responses import success_response
 from models.cardio import CardioSession
 from models.users import User
+from schemas.base import IResponse
 from schemas.cardio import CardioCreate, CardioOut
 from services import cardio_service
 
 router = APIRouter()
 
 
-@router.post("", response_model=CardioOut, summary="创建有氧记录")
+@router.post("", response_model=IResponse[CardioOut], summary="创建有氧记录")
 async def create_cardio(
     payload: CardioCreate,
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -39,10 +41,14 @@ async def create_cardio(
 
     await db.commit()
     await db.refresh(session)
-    return session
+    return success_response(CardioOut.model_validate(session))
 
 
-@router.get("/{session_id}/geojson", summary="获取轨迹 GeoJSON")
+@router.get(
+    "/{session_id}/geojson",
+    response_model=IResponse[dict],
+    summary="获取轨迹 GeoJSON",
+)
 async def get_route_geojson(
     session_id: str,
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -61,10 +67,14 @@ async def get_route_geojson(
     # 服务层负责从正确的列读取
     geojson = await cardio_service.read_route(db, session_id)
 
-    return {"id": session_id, "geojson": geojson}
+    return success_response({"id": session_id, "geojson": geojson})
 
 
-@router.get("/nearby", summary="查找经过附近的轨迹")
+@router.get(
+    "/nearby",
+    response_model=IResponse[list[CardioOut]],
+    summary="查找经过附近的轨迹",
+)
 async def nearby(
     lat: float,
     lng: float,
@@ -72,4 +82,5 @@ async def nearby(
     db: Annotated[AsyncSession, Depends(get_db)] = None,
     current_user: Annotated[User, Depends(get_current_user)] = None,
 ):
-    return await cardio_service.query_nearby(db, lat, lng, radius_m)
+    results = await cardio_service.query_nearby(db, lat, lng, radius_m)
+    return success_response(results)

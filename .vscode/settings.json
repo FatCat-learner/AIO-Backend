@@ -12,6 +12,7 @@
         "geoalchemy",
         "hashpw",
         "onupdate",
-        "sessionmaker"
+        "sessionmaker",
+        "uvicorn"
     ]
 }

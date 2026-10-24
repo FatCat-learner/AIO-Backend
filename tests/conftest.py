@@ -52,6 +52,6 @@ def auth_client(client):
         data={"username": username, "password": "123456"},
     )
     assert resp.status_code == 200, resp.text
-    token = resp.json()["access_token"]
+    token = resp.json()["data"]["access_token"]
     client.headers.update({"Authorization": f"Bearer {token}"})
     return client

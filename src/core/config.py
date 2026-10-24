@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite+aiosqlite:///./aio_demo.db"
     ENABLE_VECTOR: bool = False
 
+    # MCP 调试服务器（streamable-http，端点 /mcp），只监听本机；上线请关掉
+    MCP_ENABLED: bool = True
+
     SECRET_KEY: str = "change-me-in-production"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 天
