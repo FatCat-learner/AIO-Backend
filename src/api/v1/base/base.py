@@ -48,6 +48,43 @@ async def get_current_user(
     return user
 
 
+# 可选登录：动作库这类读路径未登录也能浏览，登录后才多出收藏 / 常用度语义。
+# auto_error=False 让 FastAPI 在没带 Authorization 头时给 None 而不是抛 401。
+oauth2_scheme_optional = OAuth2PasswordBearer(
+    tokenUrl="/api/auth/login",
+    auto_error=False,
+)
+
+
+async def get_current_user_optional(
+    token: Annotated[str | None, Depends(oauth2_scheme_optional)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> User | None:
+    """公共依赖：拿到登录用户就返回，没带 token / token 失效 / 用户被禁用一律当游客。
+
+    与 get_current_user 的差别只有一点：**从不抛 401**。
+    用于「游客可看、登录后个性化」的接口。
+    """
+    if not token:
+        return None
+
+    try:
+        payload = decode_token(token)
+        user_id = payload.get("sub")
+        if not user_id:
+            return None
+    except Exception:
+        return None
+
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+
+    if user is None or not user.is_active:
+        return None
+
+    return user
+
+
 class Pagination:
     """公共分页依赖。用法：page: Pagination = Depends()"""
 

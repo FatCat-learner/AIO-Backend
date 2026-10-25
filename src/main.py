@@ -1,27 +1,34 @@
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from api import api_router
 from core.config import settings, validate_settings
 from core.database import init_db
 from core.mcp import mcp_lifespan, mount_mcp
-from core.seed import ensure_dev_account, ensure_membership_plans
+from core.seed import ensure_dev_account, ensure_exercises, ensure_membership_plans
 
 # 必须导入模型，否则 Base.metadata 里没有表，create_all 建不出来
 from models.cardio import CardioSession  # noqa: F401
+from models.exercise import Exercise, UserExerciseFavorite  # noqa: F401
 from models.membership import MembershipPlan, Subscription  # noqa: F401
 from models.users import User  # noqa: F401
 from models.workout import WorkoutSession, WorkoutSet  # noqa: F401
 from schemas.base import IResponse
 
 logger = logging.getLogger(__name__)
+
+# 动作库媒体（1267 gif + 1267 缩略图，约 135 MB）。只放本机静态目录、不进 git，
+# 小程序那边永远走 URL /static/exercises/...，不打进包里。
+STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
 
 @asynccontextmanager
@@ -32,6 +39,7 @@ async def lifespan(app: FastAPI):
     await init_db()
     await ensure_dev_account()
     await ensure_membership_plans()
+    await ensure_exercises()
     if settings.MCP_ENABLED:
         async with mcp_lifespan():
             yield
@@ -119,6 +127,11 @@ async def unhandled_exception_handler(
 
 # 所有接口挂 /api前缀
 app.include_router(api_router, prefix="/api")
+
+# 动作库媒体：/static/exercises/gifs/<id>.gif、/static/exercises/thumbs/<id>.jpg
+# 目录首次启动时自建；媒体文件由 _ingest 脚本拷进来（已在 .gitignore 里排除）
+STATIC_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 # MCP 依赖注入服务器：端点 /mcp，必须挂在所有业务路由之后，避免抢路由
 if settings.MCP_ENABLED:

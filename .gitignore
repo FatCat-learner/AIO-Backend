@@ -14,3 +14,9 @@ wheels/
 .pytest_cache/
 .coverage
 .env
+
+# 动作库媒体（135 MB：1267 gif + 1267 缩略图），不进仓库
+# 需要时跑 scripts/copy_exercise_media.py 从 _ingest 拷回来
+/static/exercises/gifs/
+/static/exercises/thumbs/
+
