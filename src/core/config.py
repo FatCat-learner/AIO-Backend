@@ -26,8 +26,9 @@ class Settings(BaseSettings):
     ENABLE_VECTOR: bool = False
 
     # MCP 调试服务器（streamable-http，端点 /mcp），能直接读写数据库且没有鉴权。
-    # 默认开着是为了本地调试方便（会打印警告）；prod 下开着会直接拒绝启动
-    MCP_ENABLED: bool = True
+    # 默认关闭：需要 curl / 别的客户端调 /mcp 时在 .env 里设 MCP_ENABLED=true。
+    # DSH 走的是 scripts/mcp_stdio.py（stdio），不受这个开关影响
+    MCP_ENABLED: bool = False
 
     SECRET_KEY: str = DEFAULT_SECRET_KEY
     ALGORITHM: str = "HS256"
@@ -94,11 +95,15 @@ def validate_settings() -> None:
         )
     if settings.MCP_ENABLED:
         logger.warning(
-            "MCP 调试台已开启：/mcp 无鉴权且可执行任意 SQL，请勿暴露到公网"
-            "（不需要时在 .env 里设 MCP_ENABLED=false）"
+            "已挂载 /mcp 调试台：无鉴权且可执行任意 SQL，只应在本机使用"
         )
     if settings.DEV_SEED_ADMIN:
         logger.warning(
             "开发账号种子已开启：每次启动保证 %s 可登录（prod 会拒绝启动）",
             settings.DEV_ADMIN_USERNAME,
         )
+        if settings.DEV_ADMIN_PASSWORD in ("12345", "123456", "password"):
+            logger.warning(
+                "DEV_ADMIN_PASSWORD 是弱口令 %s，仅限本地开发",
+                settings.DEV_ADMIN_PASSWORD,
+            )

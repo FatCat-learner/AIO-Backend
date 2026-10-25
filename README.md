@@ -191,8 +191,12 @@ FastAPI 入口在 `pyproject.toml` 中配置为 `main:app`，源码目录通过 
 | `db_query` | 只读 SQL（select/with/explain/pragma），返回前 N 行 |
 | `db_exec` | 写 SQL，必须显式 `confirm=True` 才执行 |
 
-实现见 `src/core/mcp.py`，在 `src/main.py` 末尾挂载（`settings.MCP_ENABLED` 控制开关，
-上线部署请把 `MCP_ENABLED=false` 写进 `.env`，因为它没有任何鉴权、只靠只监听 127.0.0.1 兜底）。
+实现见 `src/core/mcp.py`。HTTP 端点（`/mcp`）由 `settings.MCP_ENABLED` 控制，**默认关闭**——
+要 curl 或别的客户端连，就在 `.env` 里写 `MCP_ENABLED=true`；DSH 走的是 `scripts/mcp_stdio.py`
+（stdio），不受这个开关影响。prod 下开着 MCP 会被启动体检直接拒绝。
+
+配置项见 `.env.example`（`cp .env.example .env` 后按需改）。`ENV=prod` 时，默认 `SECRET_KEY`、
+`MCP_ENABLED=true`、`DEV_SEED_ADMIN=true` 任一项都会让服务拒绝启动。
 
 ### 手工验证
 
@@ -200,7 +204,7 @@ FastAPI 入口在 `pyproject.toml` 中配置为 `main:app`，源码目录通过 
 # 0. 一条命令自检（initialize + tools/list + 三个工具各调一次）
 uv run python scripts/smoke_mcp.py --port 8000
 
-# 1. 装依赖 + 起服务（MCP 跟着一起起）
+# 1. 装依赖 + 起服务（默认不挂 /mcp，要 curl 调试台先 export MCP_ENABLED=true）
 uv sync
 uv run uvicorn main:app --reload
 
