@@ -15,8 +15,8 @@ class Base(DeclarativeBase):
     pass
 
 
-# 异步引擎。echo=True 会打印 SQL，调试时打开
-engine = create_async_engine(settings.DATABASE_URL, echo=True)
+# 异步引擎。SQL 回显跟随 DEBUG（prod 下把 DEBUG 设成 false，避免日志泄露语句与参数）
+engine = create_async_engine(settings.DATABASE_URL, echo=settings.DEBUG)
 
 # Session 工厂。expire_on_commit=False 避免 commit 后访问属性报错
 AsyncSessionLocal = async_sessionmaker(
