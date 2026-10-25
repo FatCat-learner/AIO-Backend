@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.v1.auth import codes
 from core.database import get_db
-from core.responses import success_response
+from core.responses import BizHTTPException, success_response
 from core.security import (
     create_access_token,
     hash_password,
@@ -32,6 +32,18 @@ router = APIRouter()
 async def _find_by_account(db: AsyncSession, account: str) -> User | None:
     result = await db.execute(select(User).where(User.username == account))
     return result.scalar_one_or_none()
+
+
+def _account_not_registered() -> BizHTTPException:
+    """账号不存在不是资源地址找不到（404），而是这个请求做不下去。
+
+    前端拿到 data.reason = account_not_registered 后会引导「先去注册」。
+    """
+    return BizHTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        message="该账号还未注册，请先注册",
+        reason="account_not_registered",
+    )
 
 
 def _token_payload(user: User) -> TokenOut:
@@ -123,14 +135,14 @@ async def login(
     form: Annotated[OAuth2PasswordRequestForm, Depends()],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    # 1. 按用户名查用户
+    # 1. 按用户名查用户 + 校验密码：两种失败对外都只说「账号或密码错误」，
+    #    密码登录不暴露账号是否存在（要引导注册的场景走验证码登录）
     user = await _find_by_account(db, form.username)
 
-    # 2. 校验密码
     if not user or not verify_password(form.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="用户名或密码错误",
+            detail="账号或密码错误",
         )
 
     if not user.is_active:
@@ -155,11 +167,7 @@ async def login_by_code(
     account = payload.account.strip()
     user = await _find_by_account(db, account)
     if not user:
-        # 不暴露「账号是否存在」以外的东西，这里明确提示未注册，前端可跳注册
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="该账号还未注册",
-        )
+        raise _account_not_registered()
 
     ok, reason = codes.verify_code("login", account, payload.code)
     if not ok:
@@ -186,10 +194,7 @@ async def reset_password(
     account = payload.account.strip()
     user = await _find_by_account(db, account)
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="该账号还未注册",
-        )
+        raise _account_not_registered()
 
     ok, reason = codes.verify_code("reset", account, payload.code)
     if not ok:

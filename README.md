@@ -213,18 +213,24 @@ curl -s http://127.0.0.1:8000/mcp \
 
 ### DSH 接入
 
-在 `~/.dsh/profiles/desktop/cordis.patch.yml` 末尾追加（`serverName` 决定工具名前缀）：
+DSH 用 **stdio** 方式直接拉起 `scripts/mcp_stdio.py`（同一个工具集，复用 `src/core/mcp.py`），
+进程由 DSH 自己启，不依赖 8000 端口是否已经在跑：
 
 ```yaml
 - id: mcp-aio-backend
   name: '@deepseek-ai/dsh-mcp-client'
   config:
-    serverName: "aio-backend"
-    transport: streamable-http
-    url: "http://127.0.0.1:8000/mcp"
-    toolCallTimeoutMs: 60000
-    failOnStartupError: false
+    serverName: aio-backend
+    transport: stdio
+    command: 'F:\Code\AIOSport\aio-backend\.venv\Scripts\python.exe'
+    args:
+      - scripts/mcp_stdio.py
+    cwd: 'F:\Code\AIOSport\aio-backend'
+    failOnStartupError: true
 ```
 
-改完**重启 DSH** 才生效；后端没起的时候 DSH 启动不会失败（`failOnStartupError: false`），
-起完后端后重启一次 DSH 就能看到 `mcp__aio-backend__*` 工具。
+改完**重启 DSH** 才生效（配置文件不热加载），重启后可用 `mcp__aio-backend__*` 工具。
+想改回 HTTP、复用 uvicorn 里那个端点，就把 `transport: stdio` 换成
+`transport: streamable-http` 加 `url: "http://127.0.0.1:8000/mcp"`；但那样必须先起后端——
+客户端只在插件激活时连一次，连不上重试约 2 分钟后放弃，配 `failOnStartupError: false` 会静默失败。
+
