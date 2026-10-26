@@ -9,17 +9,20 @@ import asyncio
 import pytest
 from fastapi.testclient import TestClient
 
-from core.database import Base, engine
+from core.database import Base, engine, init_db
 from main import app
 
 
 @pytest.fixture(scope="session", autouse=True)
 def setup_database():
-    """整个测试会话开始前建表，结束后删表"""
+    """整个测试会话开始前建表，结束后删表
+
+    走 init_db 而不是裸 create_all：init_db 里还有 `_add_missing_columns`，
+    本地 test_aio.db 是旧库时也能把新列补上，和生产启动路径一致。
+    """
 
     async def _create():
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
+        await init_db()
 
     async def _drop():
         async with engine.begin() as conn:

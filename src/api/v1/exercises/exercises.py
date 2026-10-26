@@ -18,6 +18,7 @@ from core.database import get_db
 from core.responses import success_response
 from models.exercise import Exercise, UserExerciseFavorite
 from models.users import User
+from models.workout import WorkoutSession, WorkoutSet
 from schemas.base import IResponse
 from schemas.exercise import (
     ExerciseBrief,
@@ -25,6 +26,9 @@ from schemas.exercise import (
     ExerciseFavoriteOut,
     ExerciseListOut,
 )
+from schemas.workout import ExerciseHistoryOut, HistorySession, LastSet
+
+from ..workouts.common import history_set
 
 router = APIRouter()
 
@@ -212,3 +216,132 @@ async def mark_used(
     ex.use_count = (ex.use_count or 0) + 1
     await db.commit()
     return success_response({"id": ex.id, "use_count": ex.use_count})
+
+
+@router.get(
+    "/{exercise_id}/history",
+    response_model=IResponse[ExerciseHistoryOut],
+    summary="动作历史（最近 N 次训练 + 个人最佳 PR）",
+)
+async def exercise_history(
+    exercise_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+    limit: Annotated[int, Query(ge=1, le=50, description="返回最近多少次训练")] = 5,
+):
+    """客户端「上次重量/次数」回填与 PR 展示的唯一来源。
+
+    只统计 `done=true` 的组：没打勾的组是「计划做但没做完」，不能当成绩。
+    `last` 取最近一次训练里最重的那组；`pr` 取全历史单组最重（同重取次数多）。
+    """
+    ex = await db.get(Exercise, exercise_id)
+    if ex is None or not ex.is_active:
+        raise HTTPException(status_code=404, detail="动作不存在")
+
+    done = (
+        WorkoutSet.exercise_id == exercise_id,
+        WorkoutSet.done.is_(True),
+        WorkoutSet.deleted_at.is_(None),
+    )
+    base = (
+        select(WorkoutSession.id, WorkoutSession.start_time)
+        .join(WorkoutSet, WorkoutSet.session_id == WorkoutSession.id)
+        .where(
+            WorkoutSession.user_id == current_user.id,
+            *done,
+            WorkoutSession.deleted_at.is_(None),
+        )
+    )
+
+    total = (
+        await db.execute(
+            select(func.count()).select_from(
+                base.group_by(WorkoutSession.id, WorkoutSession.start_time).subquery()
+            )
+        )
+    ).scalar_one()
+
+    sessions = (
+        await db.execute(
+            base.group_by(WorkoutSession.id, WorkoutSession.start_time)
+            .order_by(WorkoutSession.start_time.desc())
+            .limit(limit)
+        )
+    ).all()
+
+    items: list[HistorySession] = []
+    last: LastSet | None = None
+    if sessions:
+        ids = [row[0] for row in sessions]
+        rows = (
+            await db.execute(
+                select(WorkoutSet)
+                .where(
+                    WorkoutSet.session_id.in_(ids),
+                    WorkoutSet.exercise_id == exercise_id,
+                    WorkoutSet.done.is_(True),
+                    WorkoutSet.deleted_at.is_(None),
+                )
+                .order_by(WorkoutSet.set_index.asc())
+            )
+        ).scalars()
+        grouped: dict[str, list[WorkoutSet]] = {}
+        for row in rows:
+            grouped.setdefault(row.session_id, []).append(row)
+        for session_id, start_time in sessions:
+            group = grouped.get(session_id, [])
+            items.append(
+                HistorySession(
+                    date=start_time.date().isoformat(),
+                    session_id=session_id,
+                    sets=[history_set(row) for row in group],
+                )
+            )
+            # 最近一次训练（sessions 已按时间倒序，第一场就是最近）
+            if last is None and group:
+                best = max(group, key=lambda r: (r.weight_kg or 0, r.reps or 0))
+                last = LastSet(
+                    weight=float(best.weight_kg or 0),
+                    reps=best.reps or 0,
+                    date=start_time.date().isoformat(),
+                )
+
+    pr_row = (
+        await db.execute(
+            select(WorkoutSet, WorkoutSession.start_time)
+            .join(WorkoutSession, WorkoutSession.id == WorkoutSet.session_id)
+            .where(
+                WorkoutSession.user_id == current_user.id,
+                WorkoutSession.deleted_at.is_(None),
+                WorkoutSet.exercise_id == exercise_id,
+                WorkoutSet.done.is_(True),
+                WorkoutSet.deleted_at.is_(None),
+            )
+            .order_by(
+                func.coalesce(WorkoutSet.weight_kg, 0).desc(),
+                func.coalesce(WorkoutSet.reps, 0).desc(),
+                WorkoutSession.start_time.desc(),
+            )
+            .limit(1)
+        )
+    ).first()
+
+    pr = (
+        LastSet(
+            weight=float(pr_row[0].weight_kg or 0),
+            reps=pr_row[0].reps or 0,
+            date=pr_row[1].date().isoformat(),
+        )
+        if pr_row is not None
+        else None
+    )
+    return success_response(
+        ExerciseHistoryOut(
+            exercise_id=exercise_id,
+            name=ex.zh_name,
+            items=items,
+            last=last,
+            pr=pr,
+            total=total,
+        )
+    )

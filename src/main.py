@@ -21,7 +21,7 @@ from models.cardio import CardioSession  # noqa: F401
 from models.exercise import Exercise, UserExerciseFavorite  # noqa: F401
 from models.membership import MembershipPlan, Subscription  # noqa: F401
 from models.users import User  # noqa: F401
-from models.workout import WorkoutSession, WorkoutSet  # noqa: F401
+from models.workout import WorkoutExercise, WorkoutSession, WorkoutSet  # noqa: F401
 from schemas.base import IResponse
 
 logger = logging.getLogger(__name__)

@@ -7,7 +7,7 @@ from .health import health_router
 from .membership import membership_router
 from .sync import sync_router
 from .users import users_router
-from .workouts import workouts_router
+from .workouts import workout_sets_router, workouts_router
 
 v1_router = APIRouter()
 
@@ -20,5 +20,6 @@ v1_router.include_router(membership_router, prefix="/membership", tags=["会员�
 v1_router.include_router(sync_router, prefix="/sync", tags=["数据同步"])
 v1_router.include_router(users_router, prefix="/users", tags=["用户管理"])
 v1_router.include_router(workouts_router, prefix="/workouts", tags=["训练记录"])
+v1_router.include_router(workout_sets_router, prefix="/workout-sets", tags=["训练记录"])
 
 __all__ = ["v1_router"]
